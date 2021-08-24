@@ -7,12 +7,13 @@ import android.widget.CheckBox
 import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.example.test.model.Gif
 import kotlinx.android.synthetic.main.item_gif.view.*
 
 class MainAdapter(private val callback: OnItemClick) :
     RecyclerView.Adapter<MainAdapter.MainViewHolder>() {
-    var list = mutableListOf<String>()
-    var favList = mutableListOf<String>()
+    var list = mutableListOf<Gif>()
+    var favList = mutableListOf<Gif>()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MainViewHolder {
         val view = LayoutInflater
@@ -22,11 +23,11 @@ class MainAdapter(private val callback: OnItemClick) :
     }
 
     override fun onBindViewHolder(holder: MainViewHolder, position: Int) {
-        val url = list[position]
-        holder.bind(url,favList)
+        val gif = list[position]
+        holder.bind(gif,favList)
 
         holder.itemView.cbGifFavorite.setOnClickListener {
-            callback.onFavoriteClick(url)
+            callback.onFavoriteClick(gif,holder.itemView.findViewById<CheckBox>(R.id.cbGifFavorite).isChecked)
         }
     }
 
@@ -36,17 +37,19 @@ class MainAdapter(private val callback: OnItemClick) :
         private val gifImage = itemView.findViewById<ImageView>(R.id.gifImage)
         private val gifFavoryte = itemView.findViewById<CheckBox>(R.id.cbGifFavorite)
 
-        fun bind(url: String, favlist:MutableList<String>) {
-            if(favlist.contains(url)){
-                gifFavoryte.isChecked = true
-            }else{
-                gifFavoryte.isChecked = false
+        fun bind(gif: Gif, favlist:MutableList<Gif>) {
+            var flag = false
+            favlist.forEach {
+                if(it.idGif == gif.idGif){
+                    flag = true
+                }
             }
-            Glide.with(itemView).load(url).into(gifImage)
+            gifFavoryte.isChecked = flag
+            Glide.with(itemView).load(gif.url).into(gifImage)
         }
     }
 
     interface OnItemClick {
-        fun onFavoriteClick(gifUrl:String)
+        fun onFavoriteClick(gif:Gif,isFav:Boolean)
     }
 }

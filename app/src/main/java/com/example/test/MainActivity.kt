@@ -1,22 +1,27 @@
 package com.example.test
 
+import android.content.SharedPreferences
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.test.DataBase.DataBase
+import com.example.test.DataBase.FavGifDao
+import com.example.test.model.Gif
 import com.example.test.retrofit.RemoteRepository
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.coroutines.coroutineContext
 
 class MainActivity : AppCompatActivity(), MainAdapter.OnItemClick {
     private val API = "KvRGAK2AGT6UhLgboJD1C4ydiWHGQAyf"
     private val LIMIT = 24
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
     private lateinit var mainAdapter: MainAdapter
-    private val FAVORITESIZE = "favorite_size"
-    var savedList: MutableList<String> = mutableListOf()
+    var favList: MutableList<Gif> = mutableListOf()
+    lateinit var favDao: FavGifDao
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,25 +29,21 @@ class MainActivity : AppCompatActivity(), MainAdapter.OnItemClick {
 
         mainAdapter = MainAdapter(this)
         recyclerview.layoutManager = LinearLayoutManager(this)
+        DataBase.getDatabase(this)
+
+        favDao = DataBase.database.getGifDao()
         recyclerview.adapter = mainAdapter
 
-        if(!getPreferences(MODE_PRIVATE).contains(FAVORITESIZE)){
-            getPreferences(MODE_PRIVATE).edit()
-                .putInt(FAVORITESIZE,0)
-        }else {
-            favoriteLoad()
-            mainAdapter.favList.addAll(savedList)
-        }
-
+        favoriteLoad()
 
         bClear.setOnClickListener { etSearch.text.clear(); getGif() }
         bSearch.setOnClickListener { getGif(etSearch.text.toString()) }
         cbShowFavorite.setOnClickListener {
-            if(cbShowFavorite.isChecked) {
+            if (cbShowFavorite.isChecked) {
                 mainAdapter.list.clear()
-                mainAdapter.list.addAll(savedList)
+                mainAdapter.list.addAll(favList)
                 mainAdapter.notifyDataSetChanged()
-            }else{
+            } else {
                 getGif()
             }
         }
@@ -70,14 +71,23 @@ class MainActivity : AppCompatActivity(), MainAdapter.OnItemClick {
                 e.printStackTrace()
             }
             withContext(Dispatchers.Main) {
+
                 var Data = JSONObject(sucresp).getString("data")
                 for (i in 0 until LIMIT) {
+
                     var gifObj = JSONArray(Data).getString(i)
-                    mainAdapter.list.add(i, getUrl(gifObj))
+                    mainAdapter.list.add(i, createGifModel(gifObj))
                 }
                 mainAdapter.notifyDataSetChanged()
             }
         }
+    }
+
+    fun createGifModel(gifObj: String): Gif {
+        var url = getUrl(gifObj)
+        var name = JSONObject(gifObj).getString("title")
+        var idGif = JSONObject(gifObj).getString("id")
+        return Gif(idGif, name, url)
     }
 
     fun getGif(findWord: String) {
@@ -97,7 +107,8 @@ class MainActivity : AppCompatActivity(), MainAdapter.OnItemClick {
                     var Data = JSONObject(resSearch).getString("data")
                     for (i in 0 until LIMIT) {
                         var gifObj = JSONArray(Data).getString(i)
-                        mainAdapter.list.add(i, getUrl(gifObj))
+
+                        mainAdapter.list.add(i, createGifModel(gifObj))
                     }
                     mainAdapter.notifyDataSetChanged()
                 }
@@ -107,30 +118,33 @@ class MainActivity : AppCompatActivity(), MainAdapter.OnItemClick {
 
 
     fun favoriteLoad() {
-        for (i in 0 until getPreferences(MODE_PRIVATE).getInt(FAVORITESIZE,0)){
-            savedList.add(getPreferences(MODE_PRIVATE).getString(i.toString(),"")!!)
+        coroutineScope.launch {
+            favList.addAll(favDao.getAllFavGif())
+            withContext(Dispatchers.Main){
+                mainAdapter.favList.addAll(favList)
+                favList.forEach {
+                    Log.d("test1",it.idGif!!)
+                }
+            }
         }
     }
 
-    override fun onFavoriteClick(gifUrl: String) {
-        if(!savedList.contains(gifUrl)) {
-            savedList.add(gifUrl)
-            mainAdapter.favList.add(gifUrl)
-            getPreferences(MODE_PRIVATE)
-                .edit()
-                .putString((savedList.size - 1).toString(), gifUrl)
-                .putInt(FAVORITESIZE, savedList.size)
-                .apply()
-        }else{
-            getPreferences(MODE_PRIVATE)
-                .edit()
-                .remove(savedList.indexOf(gifUrl).toString())
-                .apply()
-            Log.d("test1",savedList.indexOf(gifUrl).toString())
-            mainAdapter.favList.remove(gifUrl)
-            savedList.remove(gifUrl)
 
+    override fun onFavoriteClick(gif: Gif,isFav:Boolean) {
+        Log.d("test1",isFav.toString())
+        if (isFav) {
+            favList.add(gif)
+            mainAdapter.favList.add(gif)
+            coroutineScope.launch {
+                favDao.insertFavGif(gif)
+            }
+        } else {
+            Log.d("test1",gif.idGif.toString())
+            favList.remove(gif)
+            mainAdapter.favList.remove(gif)
+            coroutineScope.launch {
+                favDao.removeFavGif(gif.idGif)
+            }
         }
     }
-
 }
